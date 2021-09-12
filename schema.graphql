@@ -1,0 +1,13 @@
+type Query {
+    types: [ContentType!]!
+    typeById(typeId: String!): ContentType
+}
+
+
+type ContentType {
+    id: String!
+    name: String!
+    codeName: String!
+    externalId: String
+    archived: Boolean!
+}

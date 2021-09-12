@@ -1,0 +1,13 @@
+cradle:
+  stack:
+    - path: "./app"
+      component: "kontent-graphql-proxy:exe:kontent-graphql-proxy"
+    
+    # - path: "./app/Config.hs"
+      # component: "simple:exe:simple-exe"
+
+    # - path: "./app/Paths_simple.hs"
+      # component: "simple:exe:simple-exe"
+
+    - path: "./test"
+      component: "kontent-graphql-proxy-test:test:kontent-graphql-proxy-test"

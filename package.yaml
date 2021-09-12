@@ -1,0 +1,54 @@
+name:                kontent-graphql-proxy
+version:             0.1.0.0
+github:              "githubuser/simple"
+license:             BSD3
+author:              "Jiri Lojda"
+maintainer:          "lojdaj@seznam.cz"
+copyright:           "2021 Jiri Lojda"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+- config.yaml
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/githubuser/simple#readme>
+
+dependencies:
+  - base >= 4.14 && < 4.15
+  - yaml >= 0.11.5 && < 0.12
+  - req >= 3.9 && < 3.10
+  - aeson >= 1.5.6 && < 1.6
+  - text >= 1.2.4 && < 1.3
+  - bytestring >= 0.10.10 && < 0.11
+  - haxl >= 2.3.0 && < 2.4
+  - hashable >= 1.3 && < 1.4
+  - morpheus-graphql
+  - morpheus-graphql-app
+  - scotty
+
+
+executables:
+  kontent-graphql-proxy:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+
+
+tests:
+  kontent-graphql-proxy-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
