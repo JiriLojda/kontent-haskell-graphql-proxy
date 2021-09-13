@@ -7,7 +7,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module DataSource.Types (loadAllContentTypes, ContentTypesRequest(..), State(..)) where
+module DataSource.Types (ContentTypesRequest(..), State(..)) where
 
 import Config (Config (..))
 import ServerModel.ContentType (ContentType)
@@ -41,6 +41,7 @@ import Control.Monad (unless, (<=<), (>=>))
 import GHC.Exception.Type (Exception)
 import qualified Data.List as List
 import qualified Control.Applicative as Applicative
+import Exceptions (FetchFailedException(FetchFailedException))
 
 newtype TypesResponse = TypesResponse { _data :: [ContentType] } deriving (Generic)
 
@@ -55,7 +56,7 @@ loadAllContentTypes Config { draftUrl, authToken, projectId } = runReq defaultHt
       jsonResponse
       (Req.oAuth2Bearer $ fromString authToken)
   liftIO $ putStrLn "Fetching types from the BE!!!"
-  pure $ fmap _data $ JSON.fromJSON $ responseBody response
+  pure . fmap _data . JSON.fromJSON . responseBody $ response
 
 
 data ContentTypesRequest a where
@@ -132,10 +133,6 @@ instance StateKey ContentTypesRequest where
 
 instance DataSourceName ContentTypesRequest where
   dataSourceName _ = "ContentTypesDataSource"
-
-newtype FetchFailedException = FetchFailedException String deriving (Show, Typeable)
-
-instance Exception FetchFailedException
 
 typeNotFound :: String
 typeNotFound = "Type with the given id not found."

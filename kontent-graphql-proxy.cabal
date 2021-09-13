@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e90099af3150ab1e179e9adeec455ea2223a5d33498350acaa66708daddc8cac
+-- hash: a19a7c4b5133ac855a95b6df57ed79e5e4dc75c1b71db6bbb4386f29deae045b
 
 name:           kontent-graphql-proxy
 version:        0.1.0.0
@@ -30,9 +30,12 @@ executable kontent-graphql-proxy
   main-is: Main.hs
   other-modules:
       Config
+      DataSource.ContentItems
       DataSource.Types
+      Exceptions
       GraphQL.Server
       Haxl.Env
+      ServerModel.ContentItem
       ServerModel.ContentType
       Paths_kontent_graphql_proxy
   hs-source-dirs:

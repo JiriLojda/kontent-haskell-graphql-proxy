@@ -1,6 +1,8 @@
 type Query {
     types: [ContentType!]!
     typeById(typeId: String!): ContentType
+
+    itemById(itemId: String!): ContentItem
 }
 
 
@@ -9,5 +11,12 @@ type ContentType {
     name: String!
     codeName: String!
     externalId: String
+    archived: Boolean!
+}
+
+type ContentItem {
+    id: String!
+    name: String!
+    codeName: String!
     archived: Boolean!
 }
