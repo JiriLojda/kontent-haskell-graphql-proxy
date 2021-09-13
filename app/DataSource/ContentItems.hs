@@ -59,7 +59,7 @@ loadItem Config { draftUrl, authToken, projectId } itemId = runReq defaultHttpCo
 
 
 data ContentItemsRequest a where
-  GetById :: String -> ContentItemsRequest ContentItem
+  GetById :: String -> ContentItemsRequest (Maybe ContentItem)
   deriving (Typeable)
 
 
@@ -67,14 +67,15 @@ instance DataSource Config ContentItemsRequest where
   fetch _state _flags config = SyncFetch $ \blockedFetches -> do
 
     putStrLn "-----------Fetch of items started-----------------"
-    let getByIdRequestVars = [(typeId, var) | BlockedFetch (GetById typeId) var <- blockedFetches] :: [(String, ResultVar ContentItem)]
+    let getByIdRequestVars = [(typeId, var) | BlockedFetch (GetById typeId) var <- blockedFetches] :: [(String, ResultVar (Maybe ContentItem))]
 
     unless (null getByIdRequestVars) $ do
       loadedTypes2 <- mapM (loadItem config . fst) getByIdRequestVars 
 
-      let varsWithValues = zip loadedTypes2 . map snd $ getByIdRequestVars
+      let maybeLoadedTypes = map resultToMaybe loadedTypes2
+      let varsWithValues = zip maybeLoadedTypes . map snd $ getByIdRequestVars
 
-      mapM_ putResultIntoVar varsWithValues
+      mapM_ (uncurry $ flip putSuccess) varsWithValues
 
     putStrLn "-----------------Fetch of items ended-------------------"
 
@@ -82,9 +83,9 @@ instance DataSource Config ContentItemsRequest where
       mapFirst :: (a -> c) -> (a, b) -> (c, b)
       mapFirst mapper (toBeMapped, toBeIgnored) = (mapper toBeMapped, toBeIgnored)
 
-      putResultIntoVar :: (Result ContentItem, ResultVar ContentItem) -> IO ()
-      putResultIntoVar (Error e, var) = putFailure var $ FetchFailedException e
-      putResultIntoVar (Success contentType, var) = putSuccess var contentType
+      resultToMaybe :: Result a -> Maybe a
+      resultToMaybe (Error _) = Nothing
+      resultToMaybe (Success a) = Just a
 
 
 instance JSON.FromJSON ContentItemsResponse where

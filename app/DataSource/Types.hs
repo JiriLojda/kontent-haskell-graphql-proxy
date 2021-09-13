@@ -61,7 +61,7 @@ loadAllContentTypes Config { draftUrl, authToken, projectId } = runReq defaultHt
 
 data ContentTypesRequest a where
   GetAllTypes :: ContentTypesRequest [ContentType]
-  GetById :: String -> ContentTypesRequest ContentType
+  GetById :: String -> ContentTypesRequest (Maybe ContentType)
   deriving (Typeable)
 
 
@@ -85,13 +85,15 @@ instance DataSource Config ContentTypesRequest where
 
         pure $ resultToMaybe loadedTypes
 
-    let getByIdRequestVars = [(typeId, var) | BlockedFetch (GetById typeId) var <- blockedFetches] :: [(String, ResultVar ContentType)]
+    let getByIdRequestVars = [(typeId, var) | BlockedFetch (GetById typeId) var <- blockedFetches] :: [(String, ResultVar (Maybe ContentType))]
 
     unless (null getByIdRequestVars) $ do
       putStrLn "Inside by id fetch"
       loadedTypes2 <- maybe (loadAllContentTypes config) (pure . Success) abc
 
-      let varsWithValues = map (mapFirst (maybe (Error typeNotFound) Success . flip findTypeById loadedTypes2)) getByIdRequestVars
+      let varsWithValues = case loadedTypes2 of
+            Error s -> map (mapFirst . const . Error $ s) getByIdRequestVars
+            Success cts -> map (mapFirst $ Success . flip findTypeById cts) getByIdRequestVars
 
       mapM_ putResultIntoVar varsWithValues
 
@@ -102,13 +104,13 @@ instance DataSource Config ContentTypesRequest where
       resultToMaybe (Error _) = Nothing
       resultToMaybe (Success res) = Just res
 
-      findTypeById :: String -> Result [ContentType] -> Maybe ContentType
-      findTypeById typeId = resultToMaybe >=> List.find ((== typeId) . Text.unpack . ContentType.id)
+      findTypeById :: String -> [ContentType] -> Maybe ContentType
+      findTypeById typeId = List.find ((== typeId) . Text.unpack . ContentType.id)
 
       mapFirst :: (a -> c) -> (a, b) -> (c, b)
       mapFirst mapper (toBeMapped, toBeIgnored) = (mapper toBeMapped, toBeIgnored)
 
-      putResultIntoVar :: (Result ContentType, ResultVar ContentType) -> IO ()
+      putResultIntoVar :: (Result (Maybe ContentType), ResultVar (Maybe ContentType)) -> IO ()
       putResultIntoVar (Error e, var) = putFailure var $ FetchFailedException e
       putResultIntoVar (Success contentType, var) = putSuccess var contentType
 

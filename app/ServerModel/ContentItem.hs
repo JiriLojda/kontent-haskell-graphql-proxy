@@ -18,7 +18,20 @@ data ContentItem =
     , name :: Text
     , codeName :: Text
     , archived :: Bool
+    , typeRef :: IdReference
+    }
+    deriving (Generic, Show)
+
+newtype IdReference = IdReference
+    { _id :: Text
     }
     deriving (Generic, Show)
 
 instance FromJSON ContentItem where
+    parseJSON = JSON.genericParseJSON (JSON.defaultOptions { JSON.fieldLabelModifier = normalizeItemProperties })
+
+instance FromJSON IdReference where
+    
+normalizeItemProperties :: String -> String
+normalizeItemProperties "typeRef" = "type"
+normalizeItemProperties prop = prop

@@ -39,28 +39,38 @@ import Control.Monad.IO.Class (liftIO)
 import Config (Config)
 import Haxl.Core (StateKey, StateStore)
 import Data.List (foldl')
+import Control.Monad ((<=<))
 
 MorpDoc.importGQLDocument "schema.graphql"
 
 rootResolver :: RootResolver MyHaxl () Query Undefined Undefined
 rootResolver =
   RootResolver
-    { queryResolver = Query {types, typeById, itemById},
+    { queryResolver = Query
+      { types = typesResolver
+      , typeById = typeByIdResolver
+      , itemById = itemByIdResolver
+      },
       mutationResolver = Undefined,
       subscriptionResolver = Undefined
     }
-  where
-    types :: ComposedResolver QUERY e MyHaxl [] ContentType
-    types = lift $ fmap contentTypeFromServerModel <$> Haxl.dataFetch TypesSource.GetAllTypes
 
-    typeById :: TypeByIdArgs -> ComposedResolver QUERY e MyHaxl Maybe ContentType
-    typeById = lift . fmap (Just . contentTypeFromServerModel) . Haxl.dataFetch . TypesSource.GetById . Text.unpack . typeId
 
-    itemById :: ItemByIdArgs -> ComposedResolver QUERY e MyHaxl Maybe ContentItem
-    itemById = lift . fmap (Just . contentItemFromServerModel) . Haxl.dataFetch . ItemsSource.GetById . Text.unpack . itemId
+typesResolver :: ComposedResolver QUERY e MyHaxl [] ContentType
+typesResolver = mapM contentTypeFromServerModel <=< lift . Haxl.dataFetch $ TypesSource.GetAllTypes
 
-contentTypeFromServerModel :: (Applicative a) => TypeServerM.ContentType -> ContentType a
-contentTypeFromServerModel TypeServerM.ContentType { .. } = ContentType
+typeByIdResolver :: TypeByIdArgs -> ComposedResolver QUERY e MyHaxl Maybe ContentType
+typeByIdResolver = resolveTypeId . typeId
+
+resolveTypeId :: Text -> ComposedResolver QUERY e MyHaxl Maybe ContentType
+resolveTypeId = mapM contentTypeFromServerModel <=< lift . Haxl.dataFetch . TypesSource.GetById . Text.unpack
+
+itemByIdResolver :: ItemByIdArgs -> ComposedResolver QUERY e MyHaxl Maybe ContentItem
+itemByIdResolver = mapM contentItemFromServerModel <=< lift . Haxl.dataFetch . ItemsSource.GetById . Text.unpack . itemId
+
+
+contentTypeFromServerModel :: TypeServerM.ContentType -> ResolverQ e MyHaxl ContentType
+contentTypeFromServerModel TypeServerM.ContentType { .. } = pure ContentType
   { id = pure id
   , name = pure name
   , codeName = pure codeName
@@ -68,13 +78,20 @@ contentTypeFromServerModel TypeServerM.ContentType { .. } = ContentType
   , archived = pure archived
   }
 
-contentItemFromServerModel :: (Applicative a) => ItemServerM.ContentItem -> ContentItem a
-contentItemFromServerModel ItemServerM.ContentItem { .. } = ContentItem
+
+contentItemFromServerModel :: ItemServerM.ContentItem -> ResolverQ e MyHaxl ContentItem
+contentItemFromServerModel ItemServerM.ContentItem { .. } = pure ContentItem
   { id = pure id
   , name = pure name
   , codeName = pure codeName
   , archived = pure archived
+  , type' = resolveTypeId (ItemServerM._id typeRef) >>= failOnNothing "Corrupted data, can't find type of content item."
   }
+
+failOnNothing :: (MonadFail m) => String -> Maybe a -> m a
+failOnNothing _ (Just a) = pure a
+failOnNothing msg Nothing = fail msg
+
 
 app :: App () MyHaxl
 app = Morp.deriveApp rootResolver

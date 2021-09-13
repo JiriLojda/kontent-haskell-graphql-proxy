@@ -19,4 +19,5 @@ type ContentItem {
     name: String!
     codeName: String!
     archived: Boolean!
+    type: ContentType!
 }

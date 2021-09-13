@@ -46,15 +46,15 @@ main = do
         -- putStrLn ("Loaded most probably not cached: " ++ show hereYouAre)
 
 
-typesToLoad :: [String]
-typesToLoad = ["17fe0013-23c1-4d28-9312-6b9589d21c31", "6d499588-b9ac-4c7d-885c-d18570dfae9c", "0a4285bf-1014-424d-acad-914647bc2d2a"]
+-- typesToLoad :: [String]
+-- typesToLoad = ["17fe0013-23c1-4d28-9312-6b9589d21c31", "6d499588-b9ac-4c7d-885c-d18570dfae9c", "0a4285bf-1014-424d-acad-914647bc2d2a"]
 
-loadTypesTest :: MyHaxl [ContentType]
-loadTypesTest = do
-  res <- mapM (dataFetch . GetById) typesToLoad
-  dataFetch GetAllTypes
-  dataFetch $ GetById "e91088e6-24fa-45f2-80e4-183e05507318"
-  pure res
+-- loadTypesTest :: MyHaxl [ContentType]
+-- loadTypesTest = do
+--   res <- mapM (dataFetch . GetById) typesToLoad
+--   dataFetch GetAllTypes
+--   dataFetch $ GetById "e91088e6-24fa-45f2-80e4-183e05507318"
+--   pure res
 
-loadOneTypeTest :: String -> MyHaxl ContentType
-loadOneTypeTest = dataFetch . GetById
+-- loadOneTypeTest :: String -> MyHaxl ContentType
+-- loadOneTypeTest = dataFetch . GetById
