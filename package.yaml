@@ -32,6 +32,8 @@ dependencies:
   - morpheus-graphql
   - morpheus-graphql-app
   - scotty
+  - http-client
+  - http-types
 
 
 executables:

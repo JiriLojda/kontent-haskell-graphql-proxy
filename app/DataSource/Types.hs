@@ -42,6 +42,8 @@ import GHC.Exception.Type (Exception)
 import qualified Data.List as List
 import qualified Control.Applicative as Applicative
 import Exceptions (FetchFailedException(FetchFailedException))
+import qualified Control.Exception as Ex
+import Control.Exception (SomeException)
 
 newtype TypesResponse = TypesResponse { _data :: [ContentType] } deriving (Generic)
 
@@ -55,13 +57,12 @@ loadAllContentTypes Config { draftUrl, authToken, projectId } = runReq defaultHt
       Req.NoReqBody
       jsonResponse
       (Req.oAuth2Bearer $ fromString authToken)
-  liftIO $ putStrLn "Fetching types from the BE!!!"
   pure . fmap _data . JSON.fromJSON . responseBody $ response
 
 
 data ContentTypesRequest a where
-  GetAllTypes :: ContentTypesRequest [ContentType]
-  GetById :: String -> ContentTypesRequest (Maybe ContentType)
+  GetAllTypes :: ContentTypesRequest (Either String [ContentType])
+  GetById :: String -> ContentTypesRequest (Either String ContentType)
   deriving (Typeable)
 
 
@@ -72,47 +73,44 @@ instance DataSource Config ContentTypesRequest where
     putStrLn "-----------Fetch of types started-----------------"
 
     abc <- if null getAllRequestVars
-      then pure Nothing
+      then pure . Left $ ("No need to fetch all" :: String)
       else do
         putStrLn "Inside get all fetch"
-        loadedTypes <- loadAllContentTypes config
+        loadedTypes <- Ex.try . loadAllContentTypes $ config :: IO (Either SomeException (Result [ContentType]))
 
-        let mapFnc = case loadedTypes of
-              Error e -> (`putFailure` FetchFailedException e)
-              Success types -> (`putSuccess` types)
+        mapM_ (`putSuccess` flatEither loadedTypes) getAllRequestVars
 
-        mapM_ mapFnc getAllRequestVars
+        pure $ flatEither loadedTypes
 
-        pure $ resultToMaybe loadedTypes
-
-    let getByIdRequestVars = [(typeId, var) | BlockedFetch (GetById typeId) var <- blockedFetches] :: [(String, ResultVar (Maybe ContentType))]
+    let getByIdRequestVars = [(typeId, var) | BlockedFetch (GetById typeId) var <- blockedFetches] :: [(String, ResultVar (Either String ContentType))]
 
     unless (null getByIdRequestVars) $ do
       putStrLn "Inside by id fetch"
-      loadedTypes2 <- maybe (loadAllContentTypes config) (pure . Success) abc
+      loadedTypes2 <- either (const . Ex.try $ loadAllContentTypes config) (pure . Right . Success) abc :: IO (Either SomeException (Result [ContentType]))
 
       let varsWithValues = case loadedTypes2 of
-            Error s -> map (mapFirst . const . Error $ s) getByIdRequestVars
-            Success cts -> map (mapFirst $ Success . flip findTypeById cts) getByIdRequestVars
+            Left e -> map (mapFirst . const . Left . show $ e) getByIdRequestVars
+            Right (Error s) -> map (mapFirst . const . Left $ s) getByIdRequestVars
+            Right (Success cts) -> map (mapFirst $ flip findTypeById cts) getByIdRequestVars
 
-      mapM_ putResultIntoVar varsWithValues
+      mapM_ (uncurry $ flip putSuccess) varsWithValues
 
     putStrLn "-----------------Fetch of types ended-------------------"
 
     where
-      resultToMaybe :: Result a -> Maybe a
-      resultToMaybe (Error _) = Nothing
-      resultToMaybe (Success res) = Just res
+      notFoundMsg :: String -> String
+      notFoundMsg typeId = "Type with id " ++ typeId ++ " doesn't exist."
 
-      findTypeById :: String -> [ContentType] -> Maybe ContentType
-      findTypeById typeId = List.find ((== typeId) . Text.unpack . ContentType.id)
+      findTypeById :: String -> [ContentType] -> Either String ContentType
+      findTypeById typeId = maybe (Left $ notFoundMsg typeId) Right . List.find ((== typeId) . Text.unpack . ContentType.id)
 
       mapFirst :: (a -> c) -> (a, b) -> (c, b)
       mapFirst mapper (toBeMapped, toBeIgnored) = (mapper toBeMapped, toBeIgnored)
 
-      putResultIntoVar :: (Result (Maybe ContentType), ResultVar (Maybe ContentType)) -> IO ()
-      putResultIntoVar (Error e, var) = putFailure var $ FetchFailedException e
-      putResultIntoVar (Success contentType, var) = putSuccess var contentType
+      flatEither :: Either SomeException (Result a) -> Either String a
+      flatEither (Left e) = Left (show e)
+      flatEither (Right (Success x)) = Right x
+      flatEither (Right (Error x)) = Left x
 
 
 instance JSON.FromJSON TypesResponse where
@@ -135,6 +133,3 @@ instance StateKey ContentTypesRequest where
 
 instance DataSourceName ContentTypesRequest where
   dataSourceName _ = "ContentTypesDataSource"
-
-typeNotFound :: String
-typeNotFound = "Type with the given id not found."

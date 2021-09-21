@@ -40,6 +40,7 @@ import Config (Config)
 import Haxl.Core (StateKey, StateStore)
 import Data.List (foldl')
 import Control.Monad ((<=<))
+import Control.Exception (Exception)
 
 MorpDoc.importGQLDocument "schema.graphql"
 
@@ -50,24 +51,27 @@ rootResolver =
       { types = typesResolver
       , typeById = typeByIdResolver
       , itemById = itemByIdResolver
-      },
-      mutationResolver = Undefined,
-      subscriptionResolver = Undefined
+      }
+    , mutationResolver = Undefined
+    , subscriptionResolver = Undefined
     }
 
 
 typesResolver :: ComposedResolver QUERY e MyHaxl [] ContentType
-typesResolver = mapM contentTypeFromServerModel <=< lift . Haxl.dataFetch $ TypesSource.GetAllTypes
+typesResolver = mapM contentTypeFromServerModel <=< failOnLeft <=< lift . Haxl.dataFetch $ TypesSource.GetAllTypes
 
 typeByIdResolver :: TypeByIdArgs -> ComposedResolver QUERY e MyHaxl Maybe ContentType
-typeByIdResolver = resolveTypeId . typeId
+typeByIdResolver = fmap Just . failOnLeft <=< resolveTypeId . typeId
 
-resolveTypeId :: Text -> ComposedResolver QUERY e MyHaxl Maybe ContentType
+resolveTypeId :: Text -> ComposedResolver QUERY e MyHaxl (Either String) ContentType
 resolveTypeId = mapM contentTypeFromServerModel <=< lift . Haxl.dataFetch . TypesSource.GetById . Text.unpack
 
 itemByIdResolver :: ItemByIdArgs -> ComposedResolver QUERY e MyHaxl Maybe ContentItem
-itemByIdResolver = mapM contentItemFromServerModel <=< lift . Haxl.dataFetch . ItemsSource.GetById . Text.unpack . itemId
+itemByIdResolver = mapM contentItemFromServerModel <=< (fmap Just . failOnLeft) <=< lift . Haxl.dataFetch . ItemsSource.GetById . Text.unpack . itemId
 
+
+failOnLeft :: (MonadFail m) => Either String a -> m a
+failOnLeft = either fail pure
 
 contentTypeFromServerModel :: TypeServerM.ContentType -> ResolverQ e MyHaxl ContentType
 contentTypeFromServerModel TypeServerM.ContentType { .. } = pure ContentType
@@ -85,16 +89,13 @@ contentItemFromServerModel ItemServerM.ContentItem { .. } = pure ContentItem
   , name = pure name
   , codeName = pure codeName
   , archived = pure archived
-  , type' = resolveTypeId (ItemServerM._id typeRef) >>= failOnNothing "Corrupted data, can't find type of content item."
+  , type' = resolveTypeId (ItemServerM._id typeRef) >>= failOnLeft
   }
 
-failOnNothing :: (MonadFail m) => String -> Maybe a -> m a
-failOnNothing _ (Just a) = pure a
-failOnNothing msg Nothing = fail msg
+-- failOnNothing :: (MonadFail m) => String -> Maybe a -> m a
+-- failOnNothing _ (Just a) = pure a
+-- failOnNothing msg Nothing = fail msg
 
-
-app :: App () MyHaxl
-app = Morp.deriveApp rootResolver
 
 interpreter :: (MapAPI a b) => a -> MyHaxl b
 interpreter = Morp.interpreter rootResolver

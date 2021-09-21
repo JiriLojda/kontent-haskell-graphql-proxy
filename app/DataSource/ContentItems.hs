@@ -21,7 +21,6 @@ import Network.HTTP.Req as Req
       jsonResponse,
       oAuth2Bearer,
       req,
-      responseBody,
       runReq,
       GET(..),
       NoReqBody(NoReqBody) )
@@ -42,6 +41,14 @@ import GHC.Exception.Type (Exception)
 import qualified Data.List as List
 import qualified Control.Applicative as Applicative
 import Exceptions (FetchFailedException(FetchFailedException))
+import qualified Network.HTTP.Client as HttpC
+import qualified Network.HTTP.Types as HttpT
+import qualified Data.ByteString as BString
+import Data.Functor (($>))
+import qualified Debug.Trace as Debug
+import qualified Control.Exception as Ex
+import Data.Monoid (Any)
+import Control.Exception (SomeException)
 
 newtype ContentItemsResponse = ContentItemsResponse { item :: ContentItem } deriving (Generic)
 
@@ -55,11 +62,11 @@ loadItem Config { draftUrl, authToken, projectId } itemId = runReq defaultHttpCo
       Req.NoReqBody
       jsonResponse
       (Req.oAuth2Bearer $ fromString authToken)
-  pure . fmap item . JSON.fromJSON . responseBody $ response
+  pure . fmap item . JSON.fromJSON . Req.responseBody $ response
 
 
 data ContentItemsRequest a where
-  GetById :: String -> ContentItemsRequest (Maybe ContentItem)
+  GetById :: String -> ContentItemsRequest (Either String ContentItem)
   deriving (Typeable)
 
 
@@ -67,12 +74,12 @@ instance DataSource Config ContentItemsRequest where
   fetch _state _flags config = SyncFetch $ \blockedFetches -> do
 
     putStrLn "-----------Fetch of items started-----------------"
-    let getByIdRequestVars = [(typeId, var) | BlockedFetch (GetById typeId) var <- blockedFetches] :: [(String, ResultVar (Maybe ContentItem))]
+    let getByIdRequestVars = [(typeId, var) | BlockedFetch (GetById typeId) var <- blockedFetches] :: [(String, ResultVar (Either String ContentItem))]
 
     unless (null getByIdRequestVars) $ do
-      loadedTypes2 <- mapM (loadItem config . fst) getByIdRequestVars 
+      loadedItem <- mapM (Ex.try . loadItem config . fst) getByIdRequestVars
 
-      let maybeLoadedTypes = map resultToMaybe loadedTypes2
+      let maybeLoadedTypes = map flatEither loadedItem
       let varsWithValues = zip maybeLoadedTypes . map snd $ getByIdRequestVars
 
       mapM_ (uncurry $ flip putSuccess) varsWithValues
@@ -83,9 +90,10 @@ instance DataSource Config ContentItemsRequest where
       mapFirst :: (a -> c) -> (a, b) -> (c, b)
       mapFirst mapper (toBeMapped, toBeIgnored) = (mapper toBeMapped, toBeIgnored)
 
-      resultToMaybe :: Result a -> Maybe a
-      resultToMaybe (Error _) = Nothing
-      resultToMaybe (Success a) = Just a
+      flatEither :: Either SomeException (Result a) -> Either String a
+      flatEither (Left e) = Left (show e)
+      flatEither (Right (Success x)) = Right x
+      flatEither (Right (Error x)) = Left x
 
 
 instance JSON.FromJSON ContentItemsResponse where
